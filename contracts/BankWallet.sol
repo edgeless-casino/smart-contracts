@@ -35,18 +35,18 @@ contract SafeMath {
 
 
 contract Token {
-    function transfer(address receiver, uint amount) public returns (bool) {
+    function transfer(address receiver, uint amount) public pure returns (bool) {
         (receiver);
         (amount);
         return false;
     }
 
-    function balanceOf(address holder) public view returns (uint) {
+    function balanceOf(address holder) public pure returns (uint) {
         (holder);
         return 0;
     }
 
-    function approve(address _spender, uint256 _value) public returns (bool) {
+    function approve(address _spender, uint256 _value) public pure returns (bool) {
         (_spender);
         (_value);
         return false;
@@ -192,7 +192,7 @@ contract BankWallet is Pausable, RequiringAuthorization, SafeMath {
     }
 
     // Approve casino contract to use EDG tokens
-    function approve(uint _amount) public onlyAuthorized {
+    function approve(uint _amount) public view onlyAuthorized {
         _approveForCasino(edgelessCasino, _amount);
     }
 
@@ -220,7 +220,7 @@ contract BankWallet is Pausable, RequiringAuthorization, SafeMath {
         maxFundAmount = _amount;
     }
 
-    function _approveForCasino(address _address, uint _amount) internal returns (bool _success) {
+    function _approveForCasino(address _address, uint _amount) internal view returns (bool _success) {
         Token __token = Token(edgelessToken);
         _success = __token.approve(_address, _amount);
     }
