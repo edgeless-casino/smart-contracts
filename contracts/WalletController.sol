@@ -50,6 +50,7 @@ contract RequiringAuthorization is Owned {
 contract WalletController is RequiringAuthorization {
     address public destination;
     address public defaultSweeper = address(new DefaultSweeper(address(this)));
+    bool public halted = false;
 
     mapping(address => address) public sweepers;
 
@@ -66,12 +67,12 @@ contract WalletController is RequiringAuthorization {
         destination = _destination;
     }
 
-    function createWallet() public onlyAuthorized {
+    function createWallet() public {
         address wallet = address(new UserWallet(this));
         emit WalletCreated(wallet);
     }
 
-    function createWallets(uint count) public onlyAuthorized {
+    function createWallets(uint count) public {
         for (uint i = 0; i < count; i++) {
             createWallet();
         }
@@ -79,6 +80,14 @@ contract WalletController is RequiringAuthorization {
 
     function addSweeper(address _token, address _sweeper) public onlyOwner {
         sweepers[_token] = _sweeper;
+    }
+
+    function halt() public onlyAuthorized {
+        halted = true;
+    }
+
+    function start() public onlyOwner {
+        halted = false;
     }
 
     function sweeperOf(address _token) public view returns (address) {
@@ -134,6 +143,7 @@ contract AbstractSweeper {
 
     modifier canSweep() {
         if (!controller.authorized(msg.sender)) revert();
+        if (controller.halted()) revert();
         _;
     }
 }
