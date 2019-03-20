@@ -2,39 +2,52 @@
  * Allows to create contracts which would be able to receive ETH and tokens.
  * Contract will help to detect ETH deposits faster.
  * Contract idea was borrowed from Bittrex.
+ * Version: 2
  * */
 
 pragma solidity 0.4.25;
 
 
 contract Owned {
-    address public owner;
+    address public owner1;
+    address public owner2;
 
     modifier onlyOwner {
-        require(msg.sender == owner);
+        require(msg.sender != address(0));
+        require(msg.sender == owner1 || msg.sender == owner2, "Only owner.");
         _;
     }
 
     constructor() internal {
-        owner = msg.sender;
+        owner1 = msg.sender;
     }
 
-    function setOwner(address _address) public onlyOwner {
-        owner = _address;
+    function setOwner1(address _address) public onlyOwner {
+        require(_address != address(0));
+        owner1 = _address;
+    }
+
+    function setOwner2(address _address) public onlyOwner {
+        require(_address != address(0));
+        owner2 = _address;
     }
 }
 
 
 contract RequiringAuthorization is Owned {
+    Casino public casino;
+    bool public casinoAuthorized;
     mapping(address => bool) public authorized;
 
     modifier onlyAuthorized {
-        require(authorized[msg.sender]);
+        require(authorized[msg.sender] || casinoAuthorized && casino.authorized(msg.sender), "Caller is not authorized.");
         _;
     }
 
-    constructor() internal {
+    constructor(address _casino) internal {
         authorized[msg.sender] = true;
+        casino = Casino(_casino);
+        casinoAuthorized = true;
     }
 
     function authorize(address _address) public onlyOwner {
@@ -43,6 +56,18 @@ contract RequiringAuthorization is Owned {
 
     function deauthorize(address _address) public onlyOwner {
         authorized[_address] = false;
+    }
+
+    function authorizeCasino() public onlyOwner {
+        casinoAuthorized = true;
+    }
+
+    function deauthorizeCasino() public onlyOwner {
+        casinoAuthorized = false;
+    }
+
+    function setCasino(address _casino) public onlyOwner {
+        casino = Casino(_casino);
     }
 }
 
@@ -53,22 +78,28 @@ contract WalletController is RequiringAuthorization {
     bool public halted = false;
 
     mapping(address => address) public sweepers;
+    mapping(address => bool) public wallets;
 
     event EthDeposit(address _from, address _to, uint _amount);
     event WalletCreated(address _address);
     event Sweeped(address _from, address _to, address _token, uint _amount);
 
-    constructor() public {
-        owner = msg.sender;
+    modifier onlyWallet {
+        require(wallets[msg.sender], "Caller must be user wallet.");
+        _;
+    }
+
+    constructor(address _casino) public RequiringAuthorization(_casino) {
         destination = msg.sender;
     }
 
-    function setDestination(address _destination) public {
+    function setDestination(address _destination) public onlyOwner {
         destination = _destination;
     }
 
     function createWallet() public {
         address wallet = address(new UserWallet(this));
+        wallets[wallet] = true;
         emit WalletCreated(wallet);
     }
 
@@ -96,7 +127,7 @@ contract WalletController is RequiringAuthorization {
         return sweeper;
     }
 
-    function logEthDeposit(address _from, address _to, uint _amount) public {
+    function logEthDeposit(address _from, address _to, uint _amount) public onlyWallet {
         emit EthDeposit(_from, _to, _amount);
     }
 
@@ -137,13 +168,13 @@ contract AbstractSweeper {
         controller = WalletController(_controller);
     }
 
-    function () public { revert(); }
+    function () public { revert("Contract does not accept ETH."); }
 
     function sweep(address token, uint amount) public returns (bool);
 
     modifier canSweep() {
-        if (!controller.authorized(msg.sender)) revert();
-        if (controller.halted()) revert();
+        if (!(controller.authorized(msg.sender) || controller.casinoAuthorized() && controller.casino().authorized(msg.sender))) revert("Caller is not authorized to sweep.");
+        if (controller.halted()) revert("Contract is halted.");
         _;
     }
 }
@@ -192,4 +223,9 @@ contract Token {
         (val);
         return false;
     }
+}
+
+
+contract Casino {
+    mapping(address => bool) public authorized;
 }
